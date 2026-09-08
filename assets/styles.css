@@ -22,6 +22,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html {
   min-width: 20rem;
   scroll-behavior: smooth;
@@ -127,6 +131,12 @@ h3 {
 .post-date,
 .thread-row small {
   color: var(--muted);
+}
+
+.hero-nav {
+  display: flex;
+  justify-content: center;
+  margin-block-start: 1.25rem;
 }
 
 main > section {
@@ -288,6 +298,27 @@ main > section > h2 {
   background: #334155;
   color: white;
   font-weight: 700;
+}
+
+.avatar-link {
+  display: block;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  text-decoration: none;
+}
+
+.avatar-link:hover .avatar {
+  border-color: var(--link);
+}
+
+.user-name {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.user-name:hover {
+  color: var(--link-hover);
+  text-decoration: underline;
 }
 
 .post-date {
@@ -461,6 +492,222 @@ th {
 .empty-state {
   padding-block: 15vh;
   text-align: center;
+}
+
+.user-search-label {
+  display: block;
+  margin-block-end: 0.4rem;
+  font-weight: 700;
+}
+
+.user-search {
+  width: min(100%, 32rem);
+  margin-block-end: 1.5rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.user-grid,
+.activity-list,
+.profile-link-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.user-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 1rem;
+}
+
+.user-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.user-card h2,
+.user-card p {
+  margin: 0;
+}
+
+.user-card h2 {
+  font-size: 1.1rem;
+}
+
+.user-card small,
+.profile-header p,
+.activity-card time,
+.activity-forum {
+  color: var(--muted);
+}
+
+.empty-search {
+  padding: 2rem;
+  text-align: center;
+  color: var(--muted);
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin-block-end: 2rem;
+}
+
+.profile-header h1,
+.profile-header p {
+  margin: 0;
+}
+
+.profile-avatar {
+  width: 5rem;
+  height: 5rem;
+  flex-basis: 5rem;
+}
+
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
+  margin: 0 0 2.5rem;
+}
+
+.profile-stats > div {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.profile-stats dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.profile-stats dd {
+  margin: 0.2rem 0 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.profile-section {
+  margin-block: 2.5rem;
+}
+
+.profile-section > h2 {
+  padding-block-end: 0.65rem;
+  border-block-end: 1px solid var(--border);
+}
+
+.profile-link-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.profile-link-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: 0.45rem;
+  background: var(--surface);
+}
+
+.profile-link-list.compact li {
+  display: list-item;
+  margin-inline-start: 1.5rem;
+  padding: 0.35rem;
+  list-style: disc;
+  background: transparent;
+}
+
+.profile-link-list span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.activity-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.activity-card {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.activity-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.activity-title,
+.activity-forum {
+  display: block;
+}
+
+.activity-title {
+  font-weight: 700;
+}
+
+.activity-forum {
+  width: fit-content;
+  font-size: 0.85rem;
+}
+
+.activity-card time {
+  flex: 0 0 auto;
+  font-size: 0.82rem;
+}
+
+.activity-card p {
+  margin: 0.7rem 0 0;
+}
+
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-block-start: 1.5rem;
+}
+
+.pagination a {
+  min-width: 2.5rem;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  text-align: center;
+  text-decoration: none;
+}
+
+.pagination a[aria-current="page"] {
+  border-color: var(--focus);
+  background: #075985;
+  color: white;
+}
+
+@media (max-width: 38rem) {
+  .activity-card header,
+  .profile-link-list li {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
 }
 
 @media (min-width: 48rem) {

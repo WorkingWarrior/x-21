@@ -10,7 +10,7 @@ import re
 import shutil
 import sys
 import tempfile
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from html.parser import HTMLParser
@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo
 ARCHIVE_NAME = "Archiwum Forum X-21"
 BUILD_MARKER = ".x21-archive"
 DEFAULT_EXCLUDED_FORUMS = ("Reaktor",)
+USER_POSTS_PER_PAGE = 50
 REQUIRED_TABLES = {
     "xf_node",
     "xf_forum",
@@ -375,6 +376,16 @@ class RenderContext:
     attachment_paths: dict[int, str]
 
 
+@dataclass
+class UserStats:
+    user_id: int
+    username: str
+    posts: list[dict[str, Any]]
+    started_threads: list[dict[str, Any]]
+    thread_post_counts: Counter[int]
+    forum_post_counts: Counter[int]
+
+
 def render_text(value: str) -> str:
     return e(value).replace("\r\n", "\n").replace("\r", "\n").replace("\n", "<br>\n")
 
@@ -537,6 +548,30 @@ def slug_file(prefix: str, identifier: Any) -> str:
     return f"{prefix}_{int(identifier)}.html"
 
 
+def user_page_file(user_id: int, page: int = 1) -> str:
+    return f"user_{user_id}.html" if page == 1 else f"user_{user_id}_page_{page}.html"
+
+
+def pl_count(value: int, singular: str, paucal: str, plural: str) -> str:
+    absolute = abs(value)
+    if absolute == 1:
+        word = singular
+    elif absolute % 10 in {2, 3, 4} and absolute % 100 not in {12, 13, 14}:
+        word = paucal
+    else:
+        word = plural
+    return f"{value} {word}"
+
+
+def post_excerpt(message: Any, limit: int = 260) -> str:
+    text = plain_text(parse_bbcode(str(message or "")))
+    text = re.sub(r"\[/?[A-Za-z*][^\]]*\]", "", text)
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rstrip() + "…"
+
+
 def avatar_path(user_id: int, media_root: Path | None) -> str | None:
     if not media_root or user_id <= 0:
         return None
@@ -663,7 +698,10 @@ def render_index(
             )
     canonical = f"{base_url.rstrip('/')}/" if base_url else None
     content = page_head(ARCHIVE_NAME, "Statyczne archiwum społeczności Forum X-21.", canonical)
-    content += f'<header class="hero"><h1>{ARCHIVE_NAME}</h1><p>Zachowana historia społeczności.</p></header>'
+    content += (
+        f'<header class="hero"><h1>{ARCHIVE_NAME}</h1><p>Zachowana historia społeczności.</p>'
+        '<nav class="hero-nav" aria-label="Główna nawigacja"><a class="button" href="users.html">Użytkownicy</a></nav></header>'
+    )
     content += f'<main id="main-content" class="container">{"".join(sections)}</main>'
     content += page_end()
     write_page(destination / "index.html", content)
@@ -722,10 +760,16 @@ def render_thread(
         else:
             initial = username[:1].upper() if username else "?"
             identity = f'<span class="avatar avatar-fallback" aria-hidden="true">{e(initial)}</span>'
+        if user_id > 0:
+            profile_url = user_page_file(user_id)
+            identity = f'<a class="avatar-link" href="{profile_url}" aria-label="Profil użytkownika {e(username)}">{identity}</a>'
+            username_html = f'<a class="user-name" href="{profile_url}">{e(username)}</a>'
+        else:
+            username_html = e(username)
         body = render_nodes(parse_bbcode(str(post.get("message") or "")), render_context)
         post_cards.append(
             f"""<li id="post-{post_id}"><article class="post" aria-labelledby="post-author-{post_id}">
-<header class="post-author">{identity}<div><h2 id="post-author-{post_id}">{e(username)}</h2>
+<header class="post-author">{identity}<div><h2 id="post-author-{post_id}">{username_html}</h2>
 <a class="post-date" href="#post-{post_id}"><time datetime="{e(iso_time)}">{e(display_time)}</time></a></div></header>
 <div class="post-body">{body}</div>
 </article></li>"""
@@ -742,6 +786,198 @@ def render_thread(
     content += f'<main id="main-content"><ol class="post-list">{"".join(post_cards)}</ol></main></div>'
     content += page_end()
     write_page(destination / slug_file("thread", thread_id), content)
+
+
+def collect_users(
+    posts: list[dict[str, Any]],
+    threads: list[dict[str, Any]],
+    thread_by_id: dict[int, dict[str, Any]],
+) -> dict[int, UserStats]:
+    users: dict[int, UserStats] = {}
+    latest_identity: dict[int, tuple[int, str]] = {}
+
+    def get_user(user_id: int, username: str) -> UserStats:
+        if user_id not in users:
+            users[user_id] = UserStats(user_id, username or f"Użytkownik {user_id}", [], [], Counter(), Counter())
+        return users[user_id]
+
+    for post in posts:
+        user_id = int(post.get("user_id") or 0)
+        thread = thread_by_id.get(int(post.get("thread_id") or 0))
+        if user_id <= 0 or not thread:
+            continue
+        username = str(post.get("username") or f"Użytkownik {user_id}")
+        stats = get_user(user_id, username)
+        stats.posts.append(post)
+        thread_id = int(thread["thread_id"])
+        stats.thread_post_counts[thread_id] += 1
+        stats.forum_post_counts[int(thread["node_id"])] += 1
+        dated_name = (int(post.get("post_date") or 0), username)
+        if dated_name[0] >= latest_identity.get(user_id, (-1, ""))[0]:
+            latest_identity[user_id] = dated_name
+
+    for thread in threads:
+        user_id = int(thread.get("user_id") or 0)
+        if user_id <= 0:
+            continue
+        username = str(thread.get("username") or f"Użytkownik {user_id}")
+        stats = get_user(user_id, username)
+        stats.started_threads.append(thread)
+        dated_name = (int(thread.get("post_date") or 0), username)
+        if dated_name[0] >= latest_identity.get(user_id, (-1, ""))[0]:
+            latest_identity[user_id] = dated_name
+
+    for user_id, stats in users.items():
+        stats.username = latest_identity.get(user_id, (0, stats.username))[1]
+        stats.posts.sort(key=lambda post: (int(post.get("post_date") or 0), int(post["post_id"])), reverse=True)
+        stats.started_threads.sort(
+            key=lambda thread: (int(thread.get("post_date") or 0), int(thread["thread_id"])), reverse=True
+        )
+    return users
+
+
+def render_profile_avatar(user: UserStats, media_root: Path | None, size: int = 80) -> str:
+    avatar = avatar_path(user.user_id, media_root)
+    if avatar:
+        return (
+            f'<img class="avatar profile-avatar" src="{e(avatar)}" width="{size}" height="{size}" '
+            f'alt="Awatar użytkownika {e(user.username)}" loading="lazy" decoding="async">'
+        )
+    initial = user.username[:1].upper() if user.username else "?"
+    return f'<span class="avatar avatar-fallback profile-avatar" aria-hidden="true">{e(initial)}</span>'
+
+
+def render_users_index(
+    destination: Path,
+    users: dict[int, UserStats],
+    media_root: Path | None,
+    timezone: ZoneInfo,
+    base_url: str | None,
+) -> None:
+    ordered = sorted(users.values(), key=lambda user: (-len(user.posts), user.username.casefold(), user.user_id))
+    cards: list[str] = []
+    for user in ordered:
+        last_seen = "Brak publicznych postów"
+        if user.posts:
+            _, last_seen = format_time(user.posts[0].get("post_date"), timezone)
+        cards.append(
+            f"""<li class="user-card" data-user-card>
+<a class="avatar-link" href="{user_page_file(user.user_id)}">{render_profile_avatar(user, media_root, 64)}</a>
+<div><h2><a href="{user_page_file(user.user_id)}">{e(user.username)}</a></h2>
+<p>{pl_count(len(user.posts), 'post', 'posty', 'postów')} · {pl_count(len(user.started_threads), 'rozpoczęty wątek', 'rozpoczęte wątki', 'rozpoczętych wątków')}</p>
+<small>Ostatni wpis: {e(last_seen)}</small></div>
+</li>"""
+        )
+    canonical = f"{base_url.rstrip('/')}/users.html" if base_url else None
+    content = page_head(f"Użytkownicy — {ARCHIVE_NAME}", "Lista autorów publicznych wpisów w archiwum Forum X-21.", canonical)
+    content += '<div class="container page-shell">'
+    content += breadcrumb([("Strona główna", "index.html"), ("Użytkownicy", None)])
+    content += f'<header class="page-header"><h1>Użytkownicy</h1><p>{len(ordered)} autorów publicznych treści</p></header>'
+    content += (
+        '<main id="main-content"><label class="user-search-label" for="user-search">Znajdź użytkownika</label>'
+        '<input class="user-search" id="user-search" type="search" placeholder="Wpisz nazwę…" autocomplete="off">'
+        f'<ul class="user-grid">{"".join(cards)}</ul>'
+        '<p class="empty-search" data-empty-search hidden>Nie znaleziono takiego użytkownika.</p></main></div>'
+        '<script src="assets/users.js" defer></script>'
+    )
+    content += page_end()
+    write_page(destination / "users.html", content)
+
+
+def render_pagination(user_id: int, current_page: int, page_count: int) -> str:
+    if page_count <= 1:
+        return ""
+    links = []
+    for page in range(1, page_count + 1):
+        current = ' aria-current="page"' if page == current_page else ""
+        links.append(f'<a href="{user_page_file(user_id, page)}"{current}>{page}</a>')
+    return f'<nav class="pagination" aria-label="Strony postów">{"".join(links)}</nav>'
+
+
+def render_user_profiles(
+    destination: Path,
+    user: UserStats,
+    thread_by_id: dict[int, dict[str, Any]],
+    node_by_id: dict[int, dict[str, Any]],
+    timezone: ZoneInfo,
+    media_root: Path | None,
+    base_url: str | None,
+) -> None:
+    page_count = max(1, (len(user.posts) + USER_POSTS_PER_PAGE - 1) // USER_POSTS_PER_PAGE)
+    first_seen = last_seen = None
+    if user.posts:
+        _, first_seen = format_time(user.posts[-1].get("post_date"), timezone)
+        _, last_seen = format_time(user.posts[0].get("post_date"), timezone)
+
+    forum_rows = "".join(
+        f'<li><a href="{slug_file("forum", forum_id)}">{e(node_by_id[forum_id]["title"])}</a><span>{pl_count(count, "post", "posty", "postów")}</span></li>'
+        for forum_id, count in user.forum_post_counts.most_common()
+        if forum_id in node_by_id
+    )
+    started_rows = "".join(
+        f'<li><a href="{slug_file("thread", thread["thread_id"])}">{e(thread["title"])}</a></li>'
+        for thread in user.started_threads
+    )
+    participated = sorted(
+        user.thread_post_counts.items(),
+        key=lambda item: (int(thread_by_id[item[0]].get("last_post_date") or 0), item[0]),
+        reverse=True,
+    )
+    participated_rows = "".join(
+        f'<li><a href="{slug_file("thread", thread_id)}">{e(thread_by_id[thread_id]["title"])}</a><span>{pl_count(count, "post", "posty", "postów")}</span></li>'
+        for thread_id, count in participated
+    )
+
+    for page in range(1, page_count + 1):
+        start = (page - 1) * USER_POSTS_PER_PAGE
+        page_posts = user.posts[start : start + USER_POSTS_PER_PAGE]
+        activity_rows: list[str] = []
+        for post in page_posts:
+            thread = thread_by_id[int(post["thread_id"])]
+            forum_id = int(thread["node_id"])
+            iso_time, display_time = format_time(post.get("post_date"), timezone)
+            activity_rows.append(
+                f"""<li><article class="activity-card">
+<header><div><a class="activity-title" href="{slug_file('thread', thread['thread_id'])}#post-{int(post['post_id'])}">{e(thread['title'])}</a>
+<a class="activity-forum" href="{slug_file('forum', forum_id)}">{e(node_by_id[forum_id]['title'])}</a></div>
+<time datetime="{e(iso_time)}">{e(display_time)}</time></header>
+<p>{e(post_excerpt(post.get('message')))}</p></article></li>"""
+            )
+
+        filename = user_page_file(user.user_id, page)
+        canonical = f"{base_url.rstrip('/')}/{filename}" if base_url else None
+        page_suffix = f" — strona {page}" if page > 1 else ""
+        content = page_head(
+            f"{user.username}{page_suffix} — {ARCHIVE_NAME}",
+            f"Publiczna aktywność użytkownika {user.username} w archiwum Forum X-21.",
+            canonical,
+        )
+        content += '<div class="container page-shell">'
+        content += breadcrumb([("Strona główna", "index.html"), ("Użytkownicy", "users.html"), (user.username, None)])
+        content += (
+            f'<header class="profile-header">{render_profile_avatar(user, media_root)}<div><h1>{e(user.username)}</h1>'
+            '<p>Publiczna aktywność w archiwum</p></div></header>'
+        )
+        content += '<main id="main-content">'
+        if page == 1:
+            date_stats = ""
+            if first_seen and last_seen:
+                date_stats = f'<div><dt>Pierwszy wpis</dt><dd>{e(first_seen)}</dd></div><div><dt>Ostatni wpis</dt><dd>{e(last_seen)}</dd></div>'
+            content += (
+                f'<dl class="profile-stats"><div><dt>Posty</dt><dd>{len(user.posts)}</dd></div>'
+                f'<div><dt>Rozpoczęte wątki</dt><dd>{len(user.started_threads)}</dd></div>'
+                f'<div><dt>Wątki z aktywnością</dt><dd>{len(user.thread_post_counts)}</dd></div>{date_stats}</dl>'
+            )
+            if forum_rows:
+                content += f'<section class="profile-section"><h2>Aktywność w działach</h2><ul class="profile-link-list">{forum_rows}</ul></section>'
+            if started_rows:
+                content += f'<section class="profile-section"><h2>Rozpoczęte wątki</h2><ul class="profile-link-list compact">{started_rows}</ul></section>'
+            if participated_rows:
+                content += f'<section class="profile-section"><h2>Wątki, w których pisał</h2><ul class="profile-link-list">{participated_rows}</ul></section>'
+        content += f'<section class="profile-section"><h2>Posty{page_suffix}</h2><ol class="activity-list">{"".join(activity_rows)}</ol>'
+        content += render_pagination(user.user_id, page, page_count)
+        content += '</section></main></div>' + page_end()
+        write_page(destination / filename, content)
 
 
 def render_404(destination: Path) -> None:
@@ -881,6 +1117,8 @@ def build(args: argparse.Namespace) -> dict[str, int]:
         posts_by_thread[int(post["thread_id"])].append(post)
     for group in posts_by_thread.values():
         group.sort(key=lambda item: (int(item.get("position") or 0), int(item["post_id"])))
+    thread_by_id = {int(thread["thread_id"]): thread for thread in threads}
+    users = collect_users(posts, threads, thread_by_id)
 
     attachment_metadata, attachment_paths = media_attachment_paths(
         tables["xf_attachment"], tables["xf_attachment_data"], media_root
@@ -897,6 +1135,7 @@ def build(args: argparse.Namespace) -> dict[str, int]:
         shutil.copytree(assets_source, staging / "assets")
         copy_media(media_root, staging)
         render_index(staging, nodes, public_forums, threads_by_forum, args.base_url)
+        render_users_index(staging, users, media_root, timezone, args.base_url)
         for forum_id in sorted(valid_forums):
             render_forum(staging, node_by_id[forum_id], threads_by_forum.get(forum_id, []), args.base_url)
         for thread in threads:
@@ -909,6 +1148,16 @@ def build(args: argparse.Namespace) -> dict[str, int]:
                 timezone,
                 media_root,
                 render_context,
+                args.base_url,
+            )
+        for user_id in sorted(users):
+            render_user_profiles(
+                staging,
+                users[user_id],
+                thread_by_id,
+                node_by_id,
+                timezone,
+                media_root,
                 args.base_url,
             )
         render_404(staging)
@@ -925,6 +1174,7 @@ def build(args: argparse.Namespace) -> dict[str, int]:
         "forums": len(valid_forums),
         "threads": len(threads),
         "posts": len(posts),
+        "users": len(users),
         "attachments_found": len(attachment_paths),
         "private_forums_excluded": len(excluded_forum_ids),
         "private_threads_excluded": excluded_visible_threads,
@@ -972,7 +1222,7 @@ def main() -> int:
     print(
         "Generated archive: "
         f"{report['forums']} forums, {report['threads']} threads, {report['posts']} posts, "
-        f"{report['attachments_found']} local attachments."
+        f"{report['users']} users, {report['attachments_found']} local attachments."
     )
     return 0
 

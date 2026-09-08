@@ -7,10 +7,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from generate import (
     RenderContext,
     parse_insert_rows,
+    pl_count,
     parse_bbcode,
     render_nodes,
     safe_url,
     select_forum_ids,
+    post_excerpt,
+    user_page_file,
 )
 
 
@@ -87,6 +90,22 @@ class ForumSelectionTests(unittest.TestCase):
         forums = {5: {}, 12: {}}
         nodes = {5: {"title": "Laboratorium X-21"}, 12: {"title": "Reaktor"}}
         self.assertEqual(select_forum_ids(forums, nodes, ["reaktor"]), {5})
+
+
+class UserProfileTests(unittest.TestCase):
+    def test_profile_page_names(self):
+        self.assertEqual(user_page_file(7), "user_7.html")
+        self.assertEqual(user_page_file(7, 2), "user_7_page_2.html")
+
+    def test_post_excerpt_removes_bbcode(self):
+        self.assertEqual(post_excerpt("[b]Ala[/b]\nma kota"), "Ala ma kota")
+
+    def test_polish_plural_forms(self):
+        self.assertEqual(pl_count(1, "post", "posty", "postów"), "1 post")
+        self.assertEqual(pl_count(2, "post", "posty", "postów"), "2 posty")
+        self.assertEqual(pl_count(12, "post", "posty", "postów"), "12 postów")
+        self.assertEqual(pl_count(21, "post", "posty", "postów"), "21 postów")
+        self.assertEqual(pl_count(22, "post", "posty", "postów"), "22 posty")
 
 
 if __name__ == "__main__":
