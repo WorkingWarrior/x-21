@@ -56,12 +56,16 @@ W przypadku obecnej kopii archiwum parametr `--media-source` powinien wskazywać
 - `index.html` — kategorie i fora
 - `forum_ID.html` — lista wątków
 - `thread_ID.html` — posty wątku
+- `users.html` — przeszukiwalna lista autorów publicznych treści
+- `user_ID.html` i `user_ID_page_N.html` — statystyki, wątki i paginowane posty użytkownika
 - `404.html`
 - `assets/styles.css` — jeden, czytelny arkusz bez zewnętrznych frameworków
 - `media/` — lokalna kopia dostępnych avatarów i załączników
 - `build-report.json` — liczba wygenerowanych elementów i znalezionych załączników
 
 Raport podaje także liczbę pominiętych prywatnych działów i wątków.
+Profile i statystyki użytkowników są obliczane wyłącznie z opublikowanych postów i
+wątków; nie wymagają odczytywania tabel kont ani prywatnych danych.
 
 Każdy build powstaje najpierw w katalogu tymczasowym. Dopiero po wygenerowaniu i
 sprawdzeniu wszystkich lokalnych odnośników zastępuje katalog wynikowy.
