@@ -32,7 +32,7 @@ REQUIRED_TABLES = {
     "xf_attachment_data",
 }
 INSERT_START = re.compile(r"^INSERT INTO `([^`]+)` \((.*?)\) VALUES\s*$")
-TAG_RE = re.compile(r"\[(/?)([A-Za-z*][A-Za-z0-9_-]*)(?:=([^\]]*))?\]")
+TAG_RE = re.compile(r"\[(/?)([A-Za-z*][A-Za-z0-9_-]*)(?:(?:=|\s+)([^\]]*))?\]")
 YOUTUBE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{6,20}$")
 COLOR_CLASSES = {
     color: f"bb-color-{color}"
@@ -449,8 +449,16 @@ def render_tag(node: TagNode, context: RenderContext) -> str:
     if name == "img":
         text = text.strip('"\' ')
         url = safe_url(text)
+        dimensions = ""
+        if node.option:
+            requested_width = re.search(r'\bwidth\s*=\s*["\']?(\d+)', node.option, re.IGNORECASE)
+            requested_height = re.search(r'\bheight\s*=\s*["\']?(\d+)', node.option, re.IGNORECASE)
+            if requested_width and 1 <= int(requested_width.group(1)) <= 4096:
+                dimensions += f' width="{int(requested_width.group(1))}"'
+            if requested_height and 1 <= int(requested_height.group(1)) <= 4096:
+                dimensions += f' height="{int(requested_height.group(1))}"'
         return (
-            f'<img src="{e(url)}" alt="Obraz z archiwalnego postu" loading="lazy" decoding="async">'
+            f'<img src="{e(url)}" alt="Obraz z archiwalnego postu"{dimensions} loading="lazy" decoding="async">'
             if url
             else f'<span class="broken-media">[obraz: {e(text)}]</span>'
         )
