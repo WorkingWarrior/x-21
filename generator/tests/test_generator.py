@@ -63,6 +63,20 @@ class BbCodeTests(unittest.TestCase):
         self.assertNotIn("<img", rendered)
         self.assertIn("[img]", rendered)
 
+    def test_xenforo_image_attributes_are_supported(self):
+        rendered = self.render('[IMG width="290px"]https://example.com/image.jpg[/IMG]')
+        self.assertIn('<img src="https://example.com/image.jpg"', rendered)
+        self.assertIn(' width="290"', rendered)
+
+    def test_xenforo_attachment_attributes_are_supported(self):
+        context = RenderContext(
+            {20: {"filename": "example.jpg", "width": 640, "height": 480}},
+            {20: "media/attachments/0/example.jpg"},
+        )
+        rendered = render_nodes(parse_bbcode('[ATTACH type="full"]20[/ATTACH]'), context)
+        self.assertIn('src="media/attachments/0/example.jpg"', rendered)
+        self.assertNotIn("[ATTACH", rendered)
+
     def test_safe_url(self):
         self.assertEqual(safe_url("https://example.com"), "https://example.com")
         self.assertIsNone(safe_url("data:text/html,boom"))
