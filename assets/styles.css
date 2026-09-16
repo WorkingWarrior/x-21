@@ -287,7 +287,8 @@ main > section > h2 {
 .thread-view.container,
 .index-view.container,
 .users-view.container,
-.profile-view.container {
+.profile-view.container,
+.search-view.container {
   width: min(100% - 2rem, var(--content-width));
 }
 
@@ -1478,17 +1479,32 @@ th {
 
 /* Static archive search. */
 .search-view.page-shell {
-  padding-block: 1rem 3rem;
+  padding-block: 0.9rem 3rem;
+}
+
+.search-view .breadcrumb {
+  margin-block-end: 0.6rem;
+  font-size: 0.82rem;
+}
+
+.search-view .breadcrumb a {
+  color: #aeb8c7;
 }
 
 .search-view .page-header {
-  margin-block-end: 1rem;
+  margin-block-end: 0.8rem;
 }
 
 .search-view .page-header h1 {
-  margin-block-end: 0.2rem;
-  font-size: clamp(1.9rem, 3vw, 2.25rem);
+  margin-block-end: 0.15rem;
+  font-size: clamp(2rem, 3vw, 2.25rem);
   font-weight: 650;
+}
+
+.search-view .page-header p {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.35;
 }
 
 .search-form {
